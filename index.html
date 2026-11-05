@@ -80,7 +80,7 @@ table.t{width:100%;border-collapse:collapse}
 .t.mods{max-width:620px}.t.mods input[type=time]{width:120px}
 .num{width:60px!important;text-align:center;padding:6px 4px!important}.num.all{border-style:dashed}
 .t.mat td:first-child{min-width:200px}.t tr.tot td{font-weight:600;border-bottom:none;color:var(--muted)}
-.t.users td{min-width:110px}.t.users td.r{min-width:0}.w-dni{width:110px}
+.t.users td{min-width:110px}.t.users td:first-child select{min-width:175px}.t.users td.r{min-width:0}.w-dni{width:110px}
 .t.asg select{min-width:170px}.t.asg select.empty-sel{color:var(--muted);border-style:dashed}
 .stepper{display:inline-flex;align-items:center;border:1.5px solid var(--line);border-radius:10px;background:#fff}
 .stepper button{all:unset;cursor:pointer;width:30px;height:30px;text-align:center;font-weight:700;font-size:16px;line-height:30px}
@@ -101,6 +101,7 @@ table.t{width:100%;border-collapse:collapse}
 .alert.sm{padding:8px 12px;font-size:12px;margin-bottom:12px}
 li.w,.w{color:#c4631f}li.e,.e{color:var(--danger)}
 .pill{background:var(--bg);border-radius:999px;padding:4px 12px;font-size:12px;font-weight:600}
+.row.alt{margin-top:12px}
 .dz{display:flex;align-items:center;justify-content:center;text-align:center;border:2px dashed var(--line);border-radius:14px;padding:22px;cursor:pointer;color:var(--muted);font-size:13px;flex:1;min-width:220px;transition:all .15s}
 .dz:hover,.dz.over{border-color:var(--teal);background:#f6fbfb;color:var(--navy)}
 .logo-row{display:flex;gap:18px;align-items:center;flex-wrap:wrap}
@@ -151,7 +152,7 @@ li.w,.w{color:#c4631f}li.e,.e{color:var(--danger)}
 const CONFIG = {
   // URL de la aplicación web de Google Apps Script (ver README). Vacío = sin envío automático.
   endpoint: 'https://script.google.com/macros/s/AKfycbzGb_IinY9x-R4PA3wekV44XWR2g9NBp-KJxfBbdxjq4v6J5y7hHQo4Iv15FzG1G7Im-g/exec',
-  contacto: 'info@sabium.com.ar',
+  contacto: 'sabium.aulas@gmail.com',
   maxFileMB: 10
 };
 /* ========================================================= */
@@ -177,7 +178,7 @@ const STEPS = [
   {id:'cursos', t:'Cursos y divisiones', sub:'La estructura de cursos de cada nivel.'},
   {id:'horarios', t:'Horarios', sub:'Los módulos de cada turno: la base del calendario de clases.'},
   {id:'materias', t:'Materias', sub:'Qué materias tiene cada curso y cuántos módulos semanales.'},
-  {id:'equipo', t:'Equipo', sub:'Las personas que van a usar Sabium y su perfil de acceso.'},
+  {id:'equipo', t:'Usuarios', sub:'Las personas que van a usar Sabium y su cargo.'},
   {id:'asign', t:'Asignaciones', sub:'Quién da cada materia en cada división.'},
   {id:'curricular', t:'Diseño curricular', sub:'El marco sobre el que tus docentes van a planificar.'},
   {id:'envio', t:'Revisión y envío', sub:'Revisá que esté todo y envialo al equipo de Sabium.'}
@@ -211,7 +212,7 @@ function blank(){
     inst:{nombre:'',razon:'',cuit:'',direccion:'',localidad:'',provincia:'',pais:'Argentina',telefono:'',email:'',web:'',logo:null},
     contacto:{nombre:'',cargo:'',email:'',telefono:''},
     niveles, ciclo:{inicio:'',fin:'',periodo:'Trimestres'},
-    nomen:{}, cursos:{}, modulos:{}, materias:{}, usuarios:[], asign:{}, curricular:{},
+    nomen:{}, cursos:{}, horModo:{}, horArch:{}, modulos:{}, materias:{}, usuarios:[], asign:{}, curricular:{},
     confirmado:false, enviado:null};
 }
 let S = null;
@@ -246,6 +247,8 @@ function ensureLevel(l){
   if(!S.nomen[l]) S.nomen[l] = 'letras';
   if(!S.cursos[l]) S.cursos[l] = lvDef(l).cursos.map(n => ({id:uid(), nombre:n, divisiones:[newDiv(l,0)]}));
   if(!S.modulos[l]) S.modulos[l] = {};
+  if(!S.horModo[l]) S.horModo[l] = 'archivo';
+  if(!S.horArch[l]) S.horArch[l] = [];
   if(!S.materias[l]) S.materias[l] = [];
   if(!S.curricular[l]) S.curricular[l] = {modo:'', archivos:[], nota:''};
 }
@@ -296,7 +299,8 @@ function check(id){
       }); });
     break;
   case 'horarios':
-    A.forEach(l=>S.niveles[l].turnos.forEach(t=>{ const ms=(S.modulos[l]||{})[t]||[]; const tag=`${lvLabel(l)} · turno ${t}`;
+    A.forEach(l=>{ if(S.horModo[l]==='archivo' && !(S.horArch[l]||[]).length) err.push(`${lvLabel(l)}: subí el archivo con los horarios.`); });
+    A.filter(l=>S.horModo[l]!=='archivo').forEach(l=>S.niveles[l].turnos.forEach(t=>{ const ms=(S.modulos[l]||{})[t]||[]; const tag=`${lvLabel(l)} · turno ${t}`;
       if(!ms.some(m=>m.tipo==='Clase')) { err.push(`${tag}: cargá los módulos.`); return; }
       const v=ms.map(m=>({...m,a:toMin(m.inicio),b:toMin(m.fin)}));
       if(v.some(m=>m.a==null||m.b==null)) { err.push(`${tag}: hay horarios incompletos.`); return; }
@@ -313,7 +317,7 @@ function check(id){
     });
     break;
   case 'equipo': { const U=S.usuarios;
-    if(!U.some(u=>u.rol==='Director/a general')) err.push('Cargá al menos una persona con perfil Director/a general.');
+    if(!U.some(u=>u.rol==='Director/a general')) err.push('Cargá al menos una persona con cargo Director/a general.');
     if(!U.some(u=>u.rol==='Docente')) warn.push('Todavía no cargaste docentes.');
     let inc=0,bd=0,be=0; U.forEach(u=>{ if(!u.nombre.trim()||!u.apellido.trim()) inc++; if(!dniOk(u.dni)) bd++; if(!reEmail.test(u.email||'')) be++; });
     if(inc) err.push(`${inc} persona(s) sin nombre o apellido.`);
@@ -448,9 +452,15 @@ function genPanel(l,t,k){ return `<div class="gen">
   <button class="btn sm primary" data-act="gen" data-lv="${l}" data-t="${t}" data-k="${k}">Generar grilla</button></div>`; }
 
 V.horarios = () => { const A=activeLevels(); if(!A.length) return noLevels();
-  const sources=[]; A.forEach(l=>S.niveles[l].turnos.forEach(t=>{ if(((S.modulos[l]||{})[t]||[]).length) sources.push([l,t]); }));
-  return `<div class="alert info">Cargá los módulos de cada turno con su hora de inicio y fin. Si tenés una grilla fija (por ejemplo, módulos de 40 minutos desde las 7:45 con recreo cada dos), usá <b>Generar automáticamente</b> y después ajustá lo que haga falta.</div>` +
-  A.map(l=>`<div class="card"><h3>${esc(lvLabel(l))}</h3>${S.niveles[l].turnos.map(t=>{
+  const sources=[]; A.forEach(l=>{ if(S.horModo[l]!=='archivo') S.niveles[l].turnos.forEach(t=>{ if(((S.modulos[l]||{})[t]||[]).length) sources.push([l,t]); }); });
+  return `<div class="alert info">Subí el archivo con la grilla horaria que ya usan en la institución (Excel o PDF). Si no lo tenés, podés <b>cargarlo a mano</b> desde el mismo recuadro.</div>` +
+  A.map(l=>`<div class="card"><h3>${esc(lvLabel(l))}</h3>
+  ${S.horModo[l]==='archivo' ? `<p class="hint">La grilla horaria de cada turno (${S.niveles[l].turnos.join(', ')}). Si tiene la distribución de materias por día y curso, mejor: la usamos para armar todo.</p>
+    ${S.horArch[l].length?`<ul class="files">${S.horArch[l].map((f,fi)=>`<li><span>${esc(f.name)}</span><span class="mut">${fmtSize(f.size)}</span><button class="icon" data-act="delHor" data-lv="${l}" data-fi="${fi}" title="Quitar">✕</button></li>`).join('')}</ul>`:''}
+    ${dz('hor',l,'Arrastrá el archivo acá o hacé clic para elegirlo (Excel o PDF)','.xls,.xlsx,.csv,.ods,.pdf,.doc,.docx,.jpg,.jpeg,.png',true)}
+    <div class="row alt"><span class="mini">¿No tenés la grilla en un archivo?</span><button class="btn sm ghost" data-act="horModo" data-lv="${l}" data-v="manual">Cargarla a mano</button></div>` :
+  `<div class="row alt" style="margin-top:0"><span class="mini">Cargando la grilla a mano.</span><button class="btn sm ghost" data-act="horModo" data-lv="${l}" data-v="archivo">Prefiero subir el archivo</button></div>` +
+  S.niveles[l].turnos.map(t=>{
     const k=l+TURNOS.indexOf(t), ms=(S.modulos[l]||{})[t]||[], src=sources.filter(([a,b])=>!(a===l&&b===t)); let n=0;
     return `<div class="turno"><div class="cardhead"><h4>Turno ${t}</h4><div class="toggles">
       ${src.length?`<select data-change="copyMods" data-lv="${l}" data-t="${t}" style="width:auto"><option value="">Copiar de…</option>${src.map(([a,b])=>`<option value="${a}|${b}">${esc(lvLabel(a))} · ${b}</option>`).join('')}</select>`:''}
@@ -486,26 +496,29 @@ V.materias = () => { const A=activeLevels(); if(!A.length) return noLevels();
 
 V.equipo = () => { const U=S.usuarios, A=activeLevels(); const counts=ROLES.map(r=>U.filter(u=>u.rol===r).length);
   const list=U.map((u,i)=>[u,i]).filter(([u])=>!UI.rolFilter||u.rol===UI.rolFilter);
-  return `<div class="card"><h3>Cargá el equipo de una vez</h3>
-  <p class="hint">Copiá las filas desde tu Excel o Google Sheets y pegalas acá. Columnas sugeridas: <b>Nombre · Apellido · DNI · Email · Teléfono · Perfil</b>. El orden no es crítico: reconocemos el DNI, el email y el perfil automáticamente.</p>
-  <textarea id="paste" rows="5" placeholder="María&#9;González&#9;28123456&#9;mgonzalez@colegio.edu.ar&#9;1155550000&#9;Docente&#10;Juan&#9;Pérez&#9;30111222&#9;jperez@colegio.edu.ar&#9;&#9;Coordinador"></textarea>
-  <div class="row"><label class="inline">Perfil cuando no viene indicado <select id="paste-rol">${ROLES.map(r=>`<option ${r==='Docente'?'selected':''}>${r}</option>`).join('')}</select></label>
-  <button class="btn primary sm" data-act="paste">Agregar personas</button></div></div>
-  <div class="card"><div class="cardhead"><h3>Equipo (${U.length})</h3>
-    <div class="toggles"><button class="toggle sm ${!UI.rolFilter?'on':''}" data-act="rolFilter" data-r="">Todos</button>${ROLES.map((r,k)=>`<button class="toggle sm ${UI.rolFilter===r?'on':''}" data-act="rolFilter" data-r="${r}">${r} (${counts[k]})</button>`).join('')}</div></div>
-  <div class="alert info sm"><b>Director/a general</b> y <b>Equipo directivo</b> ven toda la institución · <b>Coordinador/a</b> revisa y aprueba las planificaciones · <b>Docente</b> planifica y registra sus clases.${A.length>1?' Con las etiquetas de <b>Niveles</b> indicás en qué nivel trabaja cada persona (si no marcás ninguna, se asume todos).':''}</div>
-  ${list.length?`<div class="tablewrap"><table class="t users"><thead><tr><th>Nombre</th><th>Apellido</th><th>DNI</th><th>Email</th><th>Teléfono</th><th>Perfil</th>${A.length>1?'<th>Niveles</th>':''}<th></th></tr></thead><tbody>
+  const modo=UI.addMode||'excel';
+  const MO=[['excel','Pegar desde Excel','Copiás el listado y lo pegás de una vez'],['mano','Agregar a mano','Cargás a cada persona directamente en la lista']];
+  return `<div class="card"><h3>¿Cómo querés cargar los usuarios?</h3>
+  <div class="opts3">${MO.map(([v,t,s])=>`<button class="opt ${modo===v?'on':''}" data-act="addMode" data-v="${v}"><b>${t}</b><small>${s}</small></button>`).join('')}</div>
+  ${modo==='excel'?`<p class="hint">Copiá las filas de tu planilla y pegalas acá: <b>Cargo · Nombre · Apellido · DNI · Email · Teléfono</b>. El orden de las columnas no importa: reconocemos el cargo, el DNI y el email solos.</p>
+  <textarea id="paste" rows="4" placeholder="Docente&#9;María&#9;González&#9;28123456&#9;mgonzalez@colegio.edu.ar&#9;1155550000&#10;Coordinador&#9;Juan&#9;Pérez&#9;30111222&#9;jperez@colegio.edu.ar"></textarea>
+  <div class="row"><label class="inline">Cargo si no viene indicado <select id="paste-rol">${ROLES.map(r=>`<option ${r==='Docente'?'selected':''}>${r}</option>`).join('')}</select></label>
+  <button class="btn primary sm" data-act="paste">Agregar a la lista</button></div>`:''}
+  <div class="turno" style="margin-top:22px"><div class="cardhead"><h4>Lista de usuarios <span class="pill">${U.length===1?'1 persona':U.length+' personas'}</span></h4>
+    ${U.length?`<div class="toggles"><button class="toggle sm ${!UI.rolFilter?'on':''}" data-act="rolFilter" data-r="">Todos</button>${ROLES.map((r,k)=>`<button class="toggle sm ${UI.rolFilter===r?'on':''}" data-act="rolFilter" data-r="${r}">${r} (${counts[k]})</button>`).join('')}</div>`:''}</div>
+  ${U.length?`<div class="alert info sm"><b>Director/a general</b> y <b>Equipo directivo</b> ven toda la institución · <b>Coordinador/a</b> revisa y aprueba las planificaciones · <b>Docente</b> planifica y registra sus clases.${A.length>1?' Con las etiquetas de <b>Niveles</b> indicás en qué nivel trabaja cada persona (si no marcás ninguna, se asume todos).':''}</div>`:''}
+  ${list.length?`<div class="tablewrap"><table class="t users"><thead><tr><th>Cargo</th><th>Nombre</th><th>Apellido</th><th>DNI</th><th>Email</th><th>Teléfono</th>${A.length>1?'<th>Niveles</th>':''}<th></th></tr></thead><tbody>
   ${list.map(([u,i])=>`<tr>
+    <td><select data-path="usuarios.${i}.rol" data-rerender>${ROLES.map(r=>`<option ${u.rol===r?'selected':''}>${r}</option>`).join('')}</select></td>
     <td><input data-path="usuarios.${i}.nombre" value="${esc(u.nombre)}"></td>
     <td><input data-path="usuarios.${i}.apellido" value="${esc(u.apellido)}"></td>
     <td><input data-path="usuarios.${i}.dni" value="${esc(u.dni)}" data-v="dni" inputmode="numeric" class="w-dni${u.dni&&!dniOk(u.dni)?' bad':''}"></td>
     <td><input data-path="usuarios.${i}.email" value="${esc(u.email)}" data-v="email" type="email" class="${u.email&&!reEmail.test(u.email)?'bad':''}"></td>
     <td><input data-path="usuarios.${i}.telefono" value="${esc(u.telefono)}" type="tel"></td>
-    <td><select data-path="usuarios.${i}.rol" data-rerender>${ROLES.map(r=>`<option ${u.rol===r?'selected':''}>${r}</option>`).join('')}</select></td>
     ${A.length>1?`<td class="nowrap">${A.map(l=>`<button class="lvtag ${(u.niveles||[]).includes(l)?'on':''}" data-act="userLv" data-i="${i}" data-lv="${l}" title="${esc(lvLabel(l))}">${esc(lvShort(l))}</button>`).join('')}</td>`:''}
     <td class="r"><button class="icon" data-act="delUser" data-i="${i}" title="Quitar">✕</button></td></tr>`).join('')}
-  </tbody></table></div>`:'<p class="empty">Todavía no hay personas cargadas.</p>'}
-  <div class="row"><button class="btn sm ghost" data-act="addUser">+ Persona</button>${U.length>1?'<button class="btn sm ghost" data-act="sortUsers">Ordenar por apellido</button>':''}</div></div>`;
+  </tbody></table></div>`:`<p class="empty">${modo==='excel'?'Cuando pegues el listado, las personas aparecen acá para que las revises.':'Todavía no hay usuarios. Empezá por el Director/a general.'}</p>`}
+  <div class="row">${modo==='mano'?'<button class="btn sm primary" data-act="addUser">+ Agregar persona</button>':''}${U.length>1?'<button class="btn sm ghost" data-act="sortUsers">Ordenar por apellido</button>':''}</div></div></div>`;
 };
 
 V.asign = () => { const A=activeLevels(); if(!A.length) return noLevels();
@@ -514,7 +527,7 @@ V.asign = () => { const A=activeLevels(); if(!A.length) return noLevels();
   const st=asignStats();
   const opts=sel=>'<option value="">Por definir</option>'+people.filter(u=>!(u.niveles&&u.niveles.length)||u.niveles.includes(l)||u.id===sel).map(u=>`<option value="${u.id}" ${u.id===sel?'selected':''}>${esc(userName(u))}${u.rol!=='Docente'?' · '+u.rol:''}</option>`).join('');
   let body='', any=false;
-  if(!people.length) body+='<div class="alert warn">Primero cargá las personas en el paso <b>Equipo</b>.</div>';
+  if(!people.length) body+='<div class="alert warn">Primero cargá las personas en el paso <b>Usuarios</b>.</div>';
   (S.cursos[l]||[]).forEach((c,ci)=>{ const ms=(S.materias[l]||[]).map((m,mi)=>[m,mi]).filter(([m])=>((m.horas||{})[c.id]||0)>0); if(!ms.length||!c.divisiones.length) return; any=true;
     body+=`<div class="sub"><h4>${esc(c.nombre)}</h4><div class="tablewrap"><table class="t asg"><thead><tr><th>Materia</th><th class="c">Mód.</th>${c.divisiones.map(d=>`<th>División ${esc(d.nombre)}</th>`).join('')}${c.divisiones.length>1?'<th></th>':''}</tr></thead><tbody>
     ${ms.map(([m,mi])=>`<tr><td>${esc(m.nombre)}</td><td class="c mut">${m.horas[c.id]}</td>${c.divisiones.map(d=>{ const k=d.id+'|'+m.id; return `<td><select data-path="asign.${k}" data-change="asignUpd" class="${S.asign[k]?'':'empty-sel'}">${opts(S.asign[k])}</select></td>`; }).join('')}${c.divisiones.length>1?`<td><button class="btn sm ghost" data-act="asignCopy" data-lv="${l}" data-ci="${ci}" data-mi="${mi}" title="Copiar la primera división a todas">Igual en todas</button></td>`:''}</tr>`).join('')}
@@ -614,14 +627,17 @@ const ACT = {
     list.forEach(u=>{ const ex=S.usuarios.find(x=>(u.dni&&String(x.dni).replace(/[.\s]/g,'')===u.dni)||(u.email&&(x.email||'').toLowerCase()===u.email));
       if(ex){ ['nombre','apellido','dni','email','telefono'].forEach(k=>{ if(u[k]&&!ex[k]) ex[k]=u[k]; }); ya++; } else { S.usuarios.push(u); nuevos++; } });
     ta.value=''; UI.rolFilter=''; save(); render(); toast(`${nuevos} persona(s) agregada(s)${ya?` · ${ya} ya estaban cargadas`:''}`); },
+  addMode: d => { UI.addMode=d.v; if(d.v==='mano'&&!S.usuarios.length){ ACT.addUser(); return; } render(); },
   rolFilter: d => { UI.rolFilter=d.r; render(); },
-  addUser: () => { UI.rolFilter=''; S.usuarios.push({id:uid(),nombre:'',apellido:'',dni:'',email:'',telefono:'',rol:'Docente',niveles:[]}); save(); render();
+  addUser: () => { UI.rolFilter=''; S.usuarios.push({id:uid(),nombre:'',apellido:'',dni:'',email:'',telefono:'',rol:S.usuarios.some(u=>u.rol==='Director/a general')?'Docente':'Director/a general',niveles:[]}); save(); render();
     setTimeout(()=>{ const r=document.querySelectorAll('table.users tbody tr'); const i=r.length&&r[r.length-1].querySelector('input'); i&&i.focus(); },0); },
   delUser: async d => { const u=S.usuarios[+d.i]; if(await ask(`¿Quitar a ${userName(u)}?`,'Quitar')){ S.usuarios.splice(+d.i,1); save(); render(); } },
   sortUsers: () => { S.usuarios.sort((a,b)=>(a.apellido||'').localeCompare(b.apellido||'')||(a.nombre||'').localeCompare(b.nombre||'')); save(); render(); },
   userLv: d => { const u=S.usuarios[+d.i]; u.niveles=u.niveles||[]; const k=u.niveles.indexOf(d.lv); k>=0?u.niveles.splice(k,1):u.niveles.push(d.lv); save(); render(); },
   asignLv: d => { UI.asignLv=d.lv; render(); },
   asignCopy: d => { const c=S.cursos[d.lv][+d.ci], m=S.materias[d.lv][+d.mi], v=S.asign[c.divisiones[0].id+'|'+m.id]||''; c.divisiones.forEach(x=>S.asign[x.id+'|'+m.id]=v); save(); render(); },
+  horModo: d => { S.horModo[d.lv]=d.v; save(); render(); },
+  delHor: d => { const f=S.horArch[d.lv][+d.fi]; S.horArch[d.lv].splice(+d.fi,1); delFile(f.id); save(); render(); },
   currModo: d => { S.curricular[d.lv].modo=d.v; save(); render(); },
   delCurr: d => { const c=S.curricular[d.lv], f=c.archivos[+d.fi]; c.archivos.splice(+d.fi,1); delFile(f.id); save(); render(); },
   delLogo: () => { if(S.inst.logo) delFile(S.inst.logo.id); S.inst.logo=null; save(); render(); },
@@ -675,6 +691,7 @@ async function onFiles(kind,lv,files){
   if(kind==='logo'){ const f=ok[0]; if(!f) return; if(!/^image\//.test(f.type)){ toast('El logo tiene que ser una imagen (PNG, JPG o SVG)'); return; }
     if(S.inst.logo) delFile(S.inst.logo.id); const id=uid(); await putFile(id,f); let thumb=''; try{ thumb=await makeThumb(f); }catch(e){}
     S.inst.logo={id,name:f.name,type:f.type,size:f.size,thumb}; save(); render(); return; }
+  if(kind==='hor'){ for(const f of ok){ const id=uid(); await putFile(id,f); S.horArch[lv].push({id,name:f.name,type:f.type,size:f.size}); } save(); render(); return; }
   if(kind==='curr'){ const c=S.curricular[lv]; for(const f of ok){ const id=uid(); await putFile(id,f); c.archivos.push({id,name:f.name,type:f.type,size:f.size}); } save(); render(); }
 }
 
@@ -683,11 +700,11 @@ function tablas(){
   const A=activeLevels(), i=S.inst, c=S.contacto, T={};
   T['Institución']=[['Campo','Valor'],['Nombre',i.nombre],['Razón social',i.razon],['CUIT',String(i.cuit).replace(/\D/g,'')],['Dirección',i.direccion],['Localidad',i.localidad],['Provincia',i.provincia],['País',i.pais],['Teléfono',i.telefono],['Email institucional',i.email],['Sitio web',i.web],['Logo',i.logo?i.logo.name:''],
     ['Contacto - Nombre',c.nombre],['Contacto - Cargo',c.cargo],['Contacto - Email',c.email],['Contacto - Teléfono',c.telefono],['Inicio de clases',S.ciclo.inicio],['Fin de clases',S.ciclo.fin],['Organización del año',S.ciclo.periodo]];
-  T['Niveles']=[['Nivel','Turnos']].concat(A.map(l=>[lvLabel(l),S.niveles[l].turnos.join(', ')]));
+  T['Niveles']=[['Nivel','Turnos','Horarios']].concat(A.map(l=>[lvLabel(l),S.niveles[l].turnos.join(', '),S.horModo[l]==='archivo'?'Archivo: '+(S.horArch[l]||[]).map(f=>f.name).join(', '):'Cargados en el asistente (pestaña Horarios)']));
   T['Cursos y divisiones']=[['Nivel','Curso','División','Turno']]; A.forEach(l=>(S.cursos[l]||[]).forEach(cu=>cu.divisiones.forEach(d=>T['Cursos y divisiones'].push([lvLabel(l),cu.nombre,d.nombre,d.turno]))));
-  T['Horarios']=[['Nivel','Turno','Módulo','Inicio','Fin','Tipo','Minutos']]; A.forEach(l=>S.niveles[l].turnos.forEach(t=>{ let n=0; ((S.modulos[l]||{})[t]||[]).forEach(m=>{ if(m.tipo==='Clase') n++; T['Horarios'].push([lvLabel(l),t,m.tipo==='Clase'?n:'',m.inicio,m.fin,m.tipo,(toMin(m.fin)??0)-(toMin(m.inicio)??0)]); }); }));
+  T['Horarios']=[['Nivel','Turno','Módulo','Inicio','Fin','Tipo','Minutos']]; A.filter(l=>S.horModo[l]!=='archivo').forEach(l=>S.niveles[l].turnos.forEach(t=>{ let n=0; ((S.modulos[l]||{})[t]||[]).forEach(m=>{ if(m.tipo==='Clase') n++; T['Horarios'].push([lvLabel(l),t,m.tipo==='Clase'?n:'',m.inicio,m.fin,m.tipo,(toMin(m.fin)??0)-(toMin(m.inicio)??0)]); }); }));
   T['Materias']=[['Nivel','Materia','Curso','Módulos semanales']]; A.forEach(l=>(S.materias[l]||[]).forEach(m=>(S.cursos[l]||[]).forEach(cu=>{ const h=(m.horas||{})[cu.id]||0; if(h>0) T['Materias'].push([lvLabel(l),m.nombre,cu.nombre,h]); })));
-  T['Equipo']=[['Apellido','Nombre','DNI','Email','Teléfono','Perfil','Niveles']].concat(S.usuarios.map(u=>[u.apellido,u.nombre,String(u.dni).replace(/[.\s]/g,''),u.email,u.telefono,u.rol,((u.niveles&&u.niveles.length)?u.niveles.filter(x=>A.includes(x)):A).map(x=>lvLabel(x)).join(', ')]));
+  T['Usuarios']=[['Cargo','Apellido','Nombre','DNI','Email','Teléfono','Niveles']].concat(S.usuarios.map(u=>[u.rol,u.apellido,u.nombre,String(u.dni).replace(/[.\s]/g,''),u.email,u.telefono,((u.niveles&&u.niveles.length)?u.niveles.filter(x=>A.includes(x)):A).map(x=>lvLabel(x)).join(', ')]));
   T['Asignaciones']=[['Nivel','Curso','División','Materia','Módulos semanales','Docente','DNI docente','Email docente']]; A.forEach(l=>asignRows(l).forEach(r=>{ const u=S.usuarios.find(x=>x.id===S.asign[r.key]); T['Asignaciones'].push([lvLabel(l),r.c.nombre,r.d.nombre,r.m.nombre,r.h,u?userName(u):'Por definir',u?u.dni:'',u?u.email:'']); }));
   const MOD={archivo:'Archivos adjuntos',mail:'Lo envían por mail',ayuda:'Necesitan ayuda'};
   T['Diseño curricular']=[['Nivel','Modalidad','Archivos','Comentarios']].concat(A.map(l=>{ const cc=S.curricular[l]||{}; return [lvLabel(l),MOD[cc.modo]||'Sin indicar',(cc.archivos||[]).map(f=>f.name).join(', '),cc.nota||'']; }));
@@ -711,6 +728,7 @@ const toB64 = b => new Promise((res,rej)=>{ const r=new FileReader(); r.onload=(
 function fromB64(s,type){ const bin=atob(s), u=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i); return new Blob([u],{type}); }
 async function fullPayload(){
   const refs=[]; if(S.inst.logo) refs.push([S.inst.logo,'Logo']);
+  activeLevels().forEach(l=>{ if(S.horModo[l]==='archivo') (S.horArch[l]||[]).forEach(f=>refs.push([f,'Horarios - '+lvLabel(l)])); });
   activeLevels().forEach(l=>((S.curricular[l]||{}).archivos||[]).forEach(f=>refs.push([f,'Diseño curricular - '+lvLabel(l)])));
   const archivos=[], faltan=[];
   for(const [f,ctx] of refs){ const b=await getFile(f.id); if(!b){ faltan.push(f.name); continue; } archivos.push({id:f.id,nombre:f.name,tipo:f.type||'application/octet-stream',contexto:ctx,base64:await toB64(b)}); }
