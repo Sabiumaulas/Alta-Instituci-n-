@@ -66,3 +66,4 @@ Después mandale el enlace a cada colegio.
 - **Tamaño de los archivos:** el límite es de 10 MB por archivo (`CONFIG.maxFileMB`). Apps Script acepta envíos de hasta unos 50 MB en total.
 - **Importación a Sabium:** `datos-alta.json` tiene una estructura fija (`datos` + `tablas`), así que se puede escribir un importador que cree niveles, cursos, usuarios y asignaciones directamente en la plataforma.
 # Alta-Instituci-n-
+# Alta-Instituci-n-
